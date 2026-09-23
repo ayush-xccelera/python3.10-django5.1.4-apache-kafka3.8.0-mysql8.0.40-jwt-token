@@ -41,3 +41,21 @@ class Product(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.status})'
+
+
+class StockHistory(models.Model):
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='stock_history',
+    )
+    previous_quantity = models.IntegerField()
+    new_quantity = models.IntegerField()
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-changed_at']
+        verbose_name_plural = 'Stock histories'
+
+    def __str__(self):
+        return f'{self.product_id}: {self.previous_quantity} -> {self.new_quantity}'

@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -6,9 +7,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .kafka_producer import publish_stock_updated
-from .models import Product
+from .models import Product, StockHistory
 from .pagination import DefaultLimitOffsetPagination
-from .serializers import ProductSerializer, ProductUpdateSerializer, StockUpdateSerializer
+from .serializers import (
+    ProductSerializer,
+    ProductUpdateSerializer,
+    StockHistorySerializer,
+    StockUpdateSerializer,
+)
 
 ALLOWED_ORDERING_FIELDS = ['created_at', 'updated_at', 'name', 'price', 'stock_quantity']
 
@@ -64,6 +70,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         product.stock_quantity = new_quantity
         product.save(update_fields=['stock_quantity', 'updated_at'])
 
+        StockHistory.objects.create(
+            product=product,
+            previous_quantity=previous_quantity,
+            new_quantity=new_quantity,
+        )
+
         publish_stock_updated(
             product_id=product.id,
             previous_quantity=previous_quantity,
@@ -72,6 +84,15 @@ class ProductViewSet(viewsets.ModelViewSet):
         )
 
         return Response(ProductSerializer(product).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='stock-history')
+    def stock_history(self, request, pk=None):
+        product = get_object_or_404(Product, pk=pk)
+        queryset = StockHistory.objects.filter(product=product).order_by('-changed_at')
+        paginator = DefaultLimitOffsetPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = StockHistorySerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     @action(detail=True, methods=['patch'], url_path='deactivate')
     def deactivate(self, request, pk=None):

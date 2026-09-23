@@ -1,6 +1,6 @@
 import pytest
 
-from products.models import Product
+from products.models import Product, StockHistory
 
 PRODUCTS_URL = '/api/v1/products/'
 
@@ -103,3 +103,66 @@ def test_delete_product(auth_client, user):
     resp = auth_client.delete(f'{PRODUCTS_URL}{p.id}/')
     assert resp.status_code == 204
     assert not Product.objects.filter(id=p.id).exists()
+
+
+@pytest.mark.django_db
+def test_stock_update_creates_history(auth_client, user):
+    p = Product.objects.create(name='History Item', price='5.00', stock_quantity=5, owner=user)
+    resp = auth_client.patch(f'{PRODUCTS_URL}{p.id}/stock/', {'delta': 5}, format='json')
+    assert resp.status_code == 200
+    history = StockHistory.objects.filter(product=p)
+    assert history.count() == 1
+    entry = history.first()
+    assert entry.previous_quantity == 5
+    assert entry.new_quantity == 10
+
+
+@pytest.mark.django_db
+def test_rejected_stock_update_does_not_create_history(auth_client, user):
+    p = Product.objects.create(name='History Item 2', price='5.00', stock_quantity=3, owner=user)
+    resp = auth_client.patch(f'{PRODUCTS_URL}{p.id}/stock/', {'delta': -10}, format='json')
+    assert resp.status_code == 400
+    assert StockHistory.objects.filter(product=p).count() == 0
+
+
+@pytest.mark.django_db
+def test_non_stock_updates_do_not_create_history(auth_client, user):
+    p = Product.objects.create(name='History Item 3', price='5.00', stock_quantity=3, owner=user)
+    auth_client.put(f'{PRODUCTS_URL}{p.id}/', {
+        'name': 'New Name',
+        'description': 'Updated desc',
+        'price': '12.50',
+    })
+    auth_client.patch(f'{PRODUCTS_URL}{p.id}/deactivate/')
+    auth_client.patch(f'{PRODUCTS_URL}{p.id}/activate/')
+    assert StockHistory.objects.filter(product=p).count() == 0
+
+
+@pytest.mark.django_db
+def test_stock_history_requires_auth(api_client, user):
+    p = Product.objects.create(name='History Item 4', price='5.00', stock_quantity=3, owner=user)
+    resp = api_client.get(f'{PRODUCTS_URL}{p.id}/stock-history/')
+    assert resp.status_code == 401
+
+
+@pytest.mark.django_db
+def test_stock_history_404_for_missing_product(auth_client):
+    resp = auth_client.get(f'{PRODUCTS_URL}999999/stock-history/')
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_stock_history_list_newest_first_paginated(auth_client, user):
+    p = Product.objects.create(name='History Item 5', price='5.00', stock_quantity=0, owner=user)
+    for delta in [1, 2, 3]:
+        resp = auth_client.patch(f'{PRODUCTS_URL}{p.id}/stock/', {'delta': delta}, format='json')
+        assert resp.status_code == 200
+
+    resp = auth_client.get(f'{PRODUCTS_URL}{p.id}/stock-history/')
+    assert resp.status_code == 200
+    assert resp.data['count'] == 3
+    results = resp.data['results']
+    changed_ats = [r['changed_at'] for r in results]
+    assert changed_ats == sorted(changed_ats, reverse=True)
+    assert results[0]['new_quantity'] == 6
+    assert results[0]['previous_quantity'] == 3

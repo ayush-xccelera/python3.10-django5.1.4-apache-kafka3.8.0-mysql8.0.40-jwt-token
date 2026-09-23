@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from .models import Product
+from .models import Product, StockHistory
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -56,3 +56,18 @@ class StockUpdateSerializer(serializers.Serializer):
                 'Provide either "delta" (relative change) or "quantity" (absolute value).'
             )
         return attrs
+
+
+class StockHistorySerializer(serializers.ModelSerializer):
+    product = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = StockHistory
+        fields = [
+            'id',
+            'product',
+            'previous_quantity',
+            'new_quantity',
+            'changed_at',
+        ]
+        read_only_fields = fields

@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(BASE_DIR / '.env_31ba26a6-f289-40e8-818c-95589081c8c8', override=True)
+load_dotenv(BASE_DIR / '.env_146e1472411e7cf2', override=True)
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv(
@@ -82,17 +82,19 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+_DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.mysql')
+
 DATABASES = {
     'default': {
-        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.mysql'),
+        'ENGINE': _DB_ENGINE,
         'NAME': os.getenv('DB_NAME', 'gen_0937fbc2f33d'),
         'USER': os.getenv('DB_USER', 'myuser'),
         'PASSWORD': os.getenv('DB_PASSWORD', 'mypassword'),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '3306'),
-        'OPTIONS': {
-            'charset': 'utf8mb4',
-        },
+        'OPTIONS': (
+            {'charset': 'utf8mb4'} if 'mysql' in _DB_ENGINE else {}
+        ),
     }
 }
 
